@@ -7,6 +7,7 @@ type DeviceInfo struct {
 }
 
 type FanStatus struct {
+	Preset       string
 	Supply       int
 	Exhaust      int
 	SupplySpeed  int

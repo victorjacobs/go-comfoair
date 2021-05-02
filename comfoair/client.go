@@ -40,6 +40,7 @@ func (c *ComfoairClient) GetFanStatus() (*FanStatus, error) {
 		return nil, err
 	} else {
 		return &FanStatus{
+			Preset:       parseFanPreset(int(response[0])),
 			Supply:       int(response[0]),
 			Exhaust:      int(response[1]),
 			SupplySpeed:  parseFanSpeed(response[2:4]),
@@ -50,6 +51,20 @@ func (c *ComfoairClient) GetFanStatus() (*FanStatus, error) {
 
 func parseFanSpeed(speed []byte) int {
 	return int(1875000.0 / float32(binary.BigEndian.Uint16(speed)))
+}
+
+func parseFanPreset(speed int) string {
+	var preset string
+	if speed == 50 {
+		preset = "mid"
+	} else if speed == 70 {
+		preset = "high"
+	} else {
+		log.Printf("Unexpected fan speed for preset conversion: %v", speed)
+		preset = "low"
+	}
+
+	return preset
 }
 
 func (c *ComfoairClient) GetValveStatus() (*ValveStatus, error) {
@@ -108,7 +123,26 @@ func (c *ComfoairClient) GetOperatingTime() (*OperatingTime, error) {
 	}
 }
 
-func (c *ComfoairClient) SetFanSpeed(speed int) error {
+func (c *ComfoairClient) SetFanPreset(preset string) error {
+	var fanSpeed int
+	if preset == "low" {
+		fanSpeed = 2
+	} else if preset == "mid" {
+		fanSpeed = 3
+	} else if preset == "high" {
+		fanSpeed = 4
+	} else {
+		return fmt.Errorf("received unexpected preset: %v", preset)
+	}
+
+	if err := c.setFanSpeed(fanSpeed); err != nil {
+		return fmt.Errorf("error setting fan speed: %v", err)
+	}
+
+	return nil
+}
+
+func (c *ComfoairClient) setFanSpeed(speed int) error {
 	if speed < 0 || speed > 4 {
 		return fmt.Errorf("invalid fan speed, tried to set %v", speed)
 	}

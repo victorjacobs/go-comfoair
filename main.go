@@ -10,7 +10,8 @@ import (
 	"github.com/victorjacobs/go-comfoair/config"
 )
 
-const topicPrefix = "test"
+const topicPrefix = "comfoair"
+const homeAssistantPrefix = "homeassistant"
 
 func main() {
 	var cfg *config.Configuration
@@ -45,33 +46,53 @@ func main() {
 		return
 	}
 
-	// Send configuration
+	// TODO do availability
+	// TODO set retain on all MQTT
+
+	// Fan control
+	homeAssistantFanConfiguration := fmt.Sprintf(`{
+		"name": "comfoair",
+		"state_topic": "%v/fan/state",
+		"command_topic": "%v/fan/cmd",
+		"preset_mode_state_topic": "%v/fan/preset/state",
+		"preset_mode_command_topic": "%v/fan/preset/cmd",
+		"preset_modes": ["low", "mid", "high"]
+	}`, topicPrefix, topicPrefix, topicPrefix, topicPrefix)
+
+	if t := mqttClient.Publish(homeAssistantPrefix+"/fan/comfoair/config", 0, false, homeAssistantFanConfiguration); t.Wait() && t.Error() != nil {
+		log.Printf("MQTT publishing failed: %v", err)
+		return
+	}
+
+	// Since we check connectivity to the controller earlier, just publish that it's turned on
+	if t := mqttClient.Publish(topicPrefix+"/fan/state", 0, false, "true"); t.Wait() && t.Error() != nil {
+		log.Printf("MQTT publishing failed: %v", err)
+		return
+	}
+
+	if t := mqttClient.Subscribe(fmt.Sprintf("%v/fan/preset/cmd", topicPrefix), 0, func(client mqtt.Client, msg mqtt.Message) {
+		preset := string(msg.Payload())
+		comfoairClient.SetFanPreset(preset)
+	}); t.Wait() && t.Error() != nil {
+		log.Printf("MQTT receive error: %v", t.Error())
+	}
 
 	// Publish sensors
 	for {
 		time.Sleep(5 * time.Second)
 
-		temp, err := comfoairClient.GetTemperatureStatus()
+		fanStatus, err := comfoairClient.GetFanStatus()
 
 		if err != nil {
-			log.Printf("Retrieving temperature failed: %v", err)
+			log.Printf("Retrieving fan status failed: %v", err)
 			break
 		}
 
-		// TODO retain == true
-		if t := mqttClient.Publish(topicPrefix+"/outside", 0, false, fmt.Sprintf("%v", temp.Outside)); t.Wait() && t.Error() != nil {
+		log.Printf("Fans: %+v", fanStatus)
+
+		if t := mqttClient.Publish(topicPrefix+"/fan/preset/state", 0, false, fanStatus.Preset); t.Wait() && t.Error() != nil {
 			log.Printf("MQTT publishing failed: %v", err)
-			break
+			return
 		}
 	}
-
-	// fanStatus, _ := comfoairClient.GetFanStatus()
-	// log.Printf("%+v", fanStatus)
-
-	// comfoairClient.SetFanSpeed(2)
-
-	// time.Sleep(2 * time.Second)
-
-	// fanStatus, _ = comfoairClient.GetFanStatus()
-	// log.Printf("%+v", fanStatus)
 }
