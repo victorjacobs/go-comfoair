@@ -12,6 +12,8 @@ import (
 	"go.bug.st/serial"
 )
 
+// TODO preset enums?
+
 type ComfoairClient struct {
 	serialPort        string
 	mutex             sync.Mutex
@@ -58,6 +60,8 @@ func parseFanPreset(speed int) string {
 	var preset string
 	if speed == 15 {
 		preset = "off"
+	} else if speed == 35 {
+		preset = "low"
 	} else if speed == 50 {
 		preset = "mid"
 	} else if speed == 70 {
@@ -128,7 +132,9 @@ func (c *ComfoairClient) GetOperatingTime() (*OperatingTime, error) {
 
 func (c *ComfoairClient) SetFanPreset(preset string) error {
 	var fanSpeed int
-	if preset == "low" || preset == "" {
+	if preset == "off" {
+		fanSpeed = 1
+	} else if preset == "low" || preset == "" {
 		fanSpeed = 2
 	} else if preset == "mid" {
 		fanSpeed = 3
@@ -138,6 +144,8 @@ func (c *ComfoairClient) SetFanPreset(preset string) error {
 		return fmt.Errorf("received unexpected preset: %v", preset)
 	}
 
+	log.Printf("Setting fan speed to %v", preset)
+
 	if err := c.setFanSpeed(fanSpeed); err != nil {
 		return fmt.Errorf("error setting fan speed: %v", err)
 	}
@@ -146,15 +154,23 @@ func (c *ComfoairClient) SetFanPreset(preset string) error {
 }
 
 func (c *ComfoairClient) ToggleFan(toggle bool) error {
+	log.Printf("Toggling fan %v", toggle)
+
 	if toggle {
 		return c.SetFanPreset(c.previousFanPreset)
 	} else {
-		// TODO errors
-		currentFanSpeed, _ := c.GetFanStatus()
-		currentPreset := parseFanPreset(currentFanSpeed.Supply)
+		var currentPreset string
+
+		if currentFanSpeed, err := c.GetFanStatus(); err != nil {
+			currentPreset = "low"
+		} else {
+			currentPreset = parseFanPreset(currentFanSpeed.Supply)
+		}
+
 		if currentPreset != "off" {
 			c.previousFanPreset = currentPreset
 		}
+
 		return c.setFanSpeed(1)
 	}
 }

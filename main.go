@@ -8,11 +8,16 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/victorjacobs/go-comfoair/comfoair"
 	"github.com/victorjacobs/go-comfoair/config"
+	"github.com/victorjacobs/go-comfoair/homeassistant"
 )
 
-const topicPrefix = "comfoair"
-const homeAssistantPrefix = "homeassistant"
-const retainMessages = false // TODO remove this when done
+// TODO maybe move this
+type sensorConfiguration struct {
+	name              string
+	sensorClass       string
+	unitOfMeasurement string
+	getter            func() string
+}
 
 func main() {
 	var cfg *config.Configuration
@@ -22,7 +27,6 @@ func main() {
 		return
 	}
 
-	// Connect serial
 	log.Printf("Connecting to %v", cfg.SerialPort)
 
 	comfoairClient, err := comfoair.NewComfoairClient(cfg.SerialPort)
@@ -47,32 +51,16 @@ func main() {
 		return
 	}
 
+	homeAssistant := homeassistant.NewHomeAssistantClient(mqttClient)
+
 	// TODO do availability
 	// TODO set retain on all MQTT
 
 	// Fan control
-	homeAssistantFanConfiguration := fmt.Sprintf(`{
-		"unique_id": "comfoair_fan",
-		"name": "Comfoair",
-		"state_topic": "%v/fan/state",
-		"command_topic": "%v/fan/cmd",
-		"preset_mode_state_topic": "%v/fan/preset/state",
-		"preset_mode_command_topic": "%v/fan/preset/cmd",
-		"preset_modes": ["off", "low", "mid", "high"]
-	}`, topicPrefix, topicPrefix, topicPrefix, topicPrefix)
+	homeAssistant.RegisterFan()
 
-	if t := mqttClient.Publish(homeAssistantPrefix+"/fan/comfoair/config", 0, retainMessages, homeAssistantFanConfiguration); t.Wait() && t.Error() != nil {
-		log.Printf("MQTT publishing failed: %v", err)
-		return
-	}
-
-	// Since we check connectivity to the controller earlier, just publish that it's turned on
-	if t := mqttClient.Publish(topicPrefix+"/fan/state", 0, retainMessages, "ON"); t.Wait() && t.Error() != nil {
-		log.Printf("MQTT publishing failed: %v", err)
-		return
-	}
-
-	if t := mqttClient.Subscribe(fmt.Sprintf("%v/fan/cmd", topicPrefix), 0, func(client mqtt.Client, msg mqtt.Message) {
+	// TODO maybe move to homeassistant client?
+	if t := mqttClient.Subscribe(fmt.Sprintf("%v/fan/cmd", config.TopicPrefix), 0, func(client mqtt.Client, msg mqtt.Message) {
 		command := string(msg.Payload())
 		if command == "OFF" {
 			comfoairClient.ToggleFan(false)
@@ -83,25 +71,26 @@ func main() {
 		log.Printf("MQTT receive error: %v", t.Error())
 	}
 
-	if t := mqttClient.Subscribe(fmt.Sprintf("%v/fan/preset/cmd", topicPrefix), 0, func(client mqtt.Client, msg mqtt.Message) {
+	if t := mqttClient.Subscribe(fmt.Sprintf("%v/fan/preset/cmd", config.TopicPrefix), 0, func(client mqtt.Client, msg mqtt.Message) {
 		preset := string(msg.Payload())
-		comfoairClient.SetFanPreset(preset)
+
+		if err = comfoairClient.SetFanPreset(preset); err != nil {
+			log.Printf("Error setting fan speed: %v", err)
+		}
 	}); t.Wait() && t.Error() != nil {
 		log.Printf("MQTT receive error: %v", t.Error())
 	}
 
-	// Publish sensors
-	for {
-		time.Sleep(5 * time.Second)
+	// Poll fan speed
+	go loopSafely(func() {
+		time.Sleep(1 * time.Second)
 
 		fanStatus, err := comfoairClient.GetFanStatus()
 
 		if err != nil {
 			log.Printf("Retrieving fan status failed: %v", err)
-			break
+			return
 		}
-
-		log.Printf("Fans: %+v", fanStatus)
 
 		// Update state
 		var stateMessage string
@@ -111,15 +100,51 @@ func main() {
 			stateMessage = "ON"
 		}
 
-		if t := mqttClient.Publish(topicPrefix+"/fan/state", 0, retainMessages, stateMessage); t.Wait() && t.Error() != nil {
-			log.Printf("MQTT publishing failed: %v", err)
+		if t := mqttClient.Publish(config.TopicPrefix+"/fan/state", 0, config.RetainMessages, stateMessage); t.Wait() && t.Error() != nil {
+			log.Printf("MQTT publishing failed: %v", t.Error())
 			return
 		}
 
 		// Update preset
-		if t := mqttClient.Publish(topicPrefix+"/fan/preset/state", 0, retainMessages, fanStatus.Preset); t.Wait() && t.Error() != nil {
-			log.Printf("MQTT publishing failed: %v", err)
+		if t := mqttClient.Publish(config.TopicPrefix+"/fan/preset/state", 0, config.RetainMessages, fanStatus.Preset); t.Wait() && t.Error() != nil {
+			log.Printf("MQTT publishing failed: %v", t.Error())
 			return
 		}
+	})
+
+	sensors := [...]sensorConfiguration{
+		{
+			name:              "Comfoair Outside Temperature",
+			sensorClass:       "temperature",
+			unitOfMeasurement: "°C",
+			getter:            func() string { return "test" },
+		},
+	}
+
+	for _, sensorConfig := range sensors {
+		// TODO errors
+		stateTopic, _ := homeAssistant.RegisterSensor(sensorConfig.name, sensorConfig.sensorClass, sensorConfig.unitOfMeasurement)
+
+		// TODO how to bind stateTopic
+		go loopSafely(func() {
+			time.Sleep(10 * time.Second)
+
+			log.Printf("Publishing %v to %v", sensorConfig.getter(), stateTopic)
+		})
+	}
+
+	select {}
+}
+
+func loopSafely(f func()) {
+	defer func() {
+		if v := recover(); v != nil {
+			log.Printf("Panic: %v, restarting", v)
+			go loopSafely(f)
+		}
+	}()
+
+	for {
+		f()
 	}
 }

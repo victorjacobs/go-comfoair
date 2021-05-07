@@ -5,6 +5,11 @@ import (
 	"os"
 )
 
+// TODO remove these when done
+const HomeAssistantPrefix = "homeassistant"
+const TopicPrefix = "comfoair"
+const RetainMessages = false
+
 type Configuration struct {
 	SerialPort string `json:"serial_port"`
 	Mqtt       Mqtt   `json:"mqtt"`
