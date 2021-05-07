@@ -12,6 +12,7 @@ import (
 
 const topicPrefix = "comfoair"
 const homeAssistantPrefix = "homeassistant"
+const retainMessages = false // TODO remove this when done
 
 func main() {
 	var cfg *config.Configuration
@@ -51,23 +52,35 @@ func main() {
 
 	// Fan control
 	homeAssistantFanConfiguration := fmt.Sprintf(`{
-		"name": "comfoair",
+		"unique_id": "comfoair_fan",
+		"name": "Comfoair",
 		"state_topic": "%v/fan/state",
 		"command_topic": "%v/fan/cmd",
 		"preset_mode_state_topic": "%v/fan/preset/state",
 		"preset_mode_command_topic": "%v/fan/preset/cmd",
-		"preset_modes": ["low", "mid", "high"]
+		"preset_modes": ["off", "low", "mid", "high"]
 	}`, topicPrefix, topicPrefix, topicPrefix, topicPrefix)
 
-	if t := mqttClient.Publish(homeAssistantPrefix+"/fan/comfoair/config", 0, false, homeAssistantFanConfiguration); t.Wait() && t.Error() != nil {
+	if t := mqttClient.Publish(homeAssistantPrefix+"/fan/comfoair/config", 0, retainMessages, homeAssistantFanConfiguration); t.Wait() && t.Error() != nil {
 		log.Printf("MQTT publishing failed: %v", err)
 		return
 	}
 
 	// Since we check connectivity to the controller earlier, just publish that it's turned on
-	if t := mqttClient.Publish(topicPrefix+"/fan/state", 0, false, "true"); t.Wait() && t.Error() != nil {
+	if t := mqttClient.Publish(topicPrefix+"/fan/state", 0, retainMessages, "ON"); t.Wait() && t.Error() != nil {
 		log.Printf("MQTT publishing failed: %v", err)
 		return
+	}
+
+	if t := mqttClient.Subscribe(fmt.Sprintf("%v/fan/cmd", topicPrefix), 0, func(client mqtt.Client, msg mqtt.Message) {
+		command := string(msg.Payload())
+		if command == "OFF" {
+			comfoairClient.ToggleFan(false)
+		} else {
+			comfoairClient.ToggleFan(true)
+		}
+	}); t.Wait() && t.Error() != nil {
+		log.Printf("MQTT receive error: %v", t.Error())
 	}
 
 	if t := mqttClient.Subscribe(fmt.Sprintf("%v/fan/preset/cmd", topicPrefix), 0, func(client mqtt.Client, msg mqtt.Message) {
@@ -90,7 +103,21 @@ func main() {
 
 		log.Printf("Fans: %+v", fanStatus)
 
-		if t := mqttClient.Publish(topicPrefix+"/fan/preset/state", 0, false, fanStatus.Preset); t.Wait() && t.Error() != nil {
+		// Update state
+		var stateMessage string
+		if fanStatus.Preset == "off" {
+			stateMessage = "OFF"
+		} else {
+			stateMessage = "ON"
+		}
+
+		if t := mqttClient.Publish(topicPrefix+"/fan/state", 0, retainMessages, stateMessage); t.Wait() && t.Error() != nil {
+			log.Printf("MQTT publishing failed: %v", err)
+			return
+		}
+
+		// Update preset
+		if t := mqttClient.Publish(topicPrefix+"/fan/preset/state", 0, retainMessages, fanStatus.Preset); t.Wait() && t.Error() != nil {
 			log.Printf("MQTT publishing failed: %v", err)
 			return
 		}

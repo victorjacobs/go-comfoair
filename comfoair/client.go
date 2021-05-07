@@ -13,8 +13,9 @@ import (
 )
 
 type ComfoairClient struct {
-	serialPort string
-	mutex      sync.Mutex
+	serialPort        string
+	mutex             sync.Mutex
+	previousFanPreset string
 }
 
 func NewComfoairClient(serialPort string) (*ComfoairClient, error) {
@@ -55,7 +56,9 @@ func parseFanSpeed(speed []byte) int {
 
 func parseFanPreset(speed int) string {
 	var preset string
-	if speed == 50 {
+	if speed == 15 {
+		preset = "off"
+	} else if speed == 50 {
 		preset = "mid"
 	} else if speed == 70 {
 		preset = "high"
@@ -125,7 +128,7 @@ func (c *ComfoairClient) GetOperatingTime() (*OperatingTime, error) {
 
 func (c *ComfoairClient) SetFanPreset(preset string) error {
 	var fanSpeed int
-	if preset == "low" {
+	if preset == "low" || preset == "" {
 		fanSpeed = 2
 	} else if preset == "mid" {
 		fanSpeed = 3
@@ -140,6 +143,20 @@ func (c *ComfoairClient) SetFanPreset(preset string) error {
 	}
 
 	return nil
+}
+
+func (c *ComfoairClient) ToggleFan(toggle bool) error {
+	if toggle {
+		return c.SetFanPreset(c.previousFanPreset)
+	} else {
+		// TODO errors
+		currentFanSpeed, _ := c.GetFanStatus()
+		currentPreset := parseFanPreset(currentFanSpeed.Supply)
+		if currentPreset != "off" {
+			c.previousFanPreset = currentPreset
+		}
+		return c.setFanSpeed(1)
+	}
 }
 
 func (c *ComfoairClient) setFanSpeed(speed int) error {
