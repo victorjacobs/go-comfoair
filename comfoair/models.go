@@ -37,4 +37,7 @@ type OperatingTime struct {
 }
 
 type Status struct {
+	Temperature *TemperatureStatus
+	Fan         *FanStatus
+	Valve       *ValveStatus
 }

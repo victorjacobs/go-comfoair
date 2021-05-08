@@ -38,6 +38,22 @@ func (c *ComfoairClient) GetDeviceInfo() (*DeviceInfo, error) {
 	}
 }
 
+func (c *ComfoairClient) GetStatus() (*Status, error) {
+	if temp, err := c.GetTemperatureStatus(); err != nil {
+		return nil, err
+	} else if fan, err := c.GetFanStatus(); err != nil {
+		return nil, err
+	} else if valve, err := c.GetValveStatus(); err != nil {
+		return nil, err
+	} else {
+		return &Status{
+			Temperature: temp,
+			Fan:         fan,
+			Valve:       valve,
+		}, nil
+	}
+}
+
 func (c *ComfoairClient) GetFanStatus() (*FanStatus, error) {
 	if response, err := c.write([]byte{0x00, 0x0b}, []byte{}); err != nil {
 		return nil, err
@@ -193,15 +209,6 @@ func convertThreeBytesToInteger(data []byte) int {
 	arr := [4]byte{}
 	copy(arr[1:], data)
 	return int(binary.BigEndian.Uint32(arr[:]))
-}
-
-func (c *ComfoairClient) GetStatus() (*Status, error) {
-	if response, err := c.write([]byte{0x00, 0xcd}, []byte{}); err != nil {
-		return nil, err
-	} else {
-		log.Printf("%v", response)
-		return &Status{}, nil
-	}
 }
 
 func (c *ComfoairClient) write(cmd []byte, data []byte) ([]byte, error) {
