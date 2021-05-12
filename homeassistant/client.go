@@ -30,7 +30,7 @@ func (h *HomeAssistantClient) RegisterFan() error {
 		PresetModes:            []string{"off", "low", "mid", "high"},
 	})
 
-	if t := h.mqtt.Publish(config.HomeAssistantPrefix+"/fan/comfoair/config", 0, config.RetainMessages, fanConfiguration); t.Wait() && t.Error() != nil {
+	if t := h.mqtt.Publish(config.HomeAssistantPrefix+"/fan/comfoair/config", 0, true, fanConfiguration); t.Wait() && t.Error() != nil {
 		return t.Error()
 	}
 
@@ -57,7 +57,7 @@ func (h *HomeAssistantClient) RegisterSensor(name string, class string, unit str
 
 	configTopic := fmt.Sprintf("%v/sensor/%v/config", config.HomeAssistantPrefix, uniqueId)
 
-	if t := h.mqtt.Publish(configTopic, 0, config.RetainMessages, sensorConfiguration); t.Wait() && t.Error() != nil {
+	if t := h.mqtt.Publish(configTopic, 0, true, sensorConfiguration); t.Wait() && t.Error() != nil {
 		return "", t.Error()
 	}
 

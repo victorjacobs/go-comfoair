@@ -61,7 +61,6 @@ func main() {
 	homeAssistantClient := homeassistant.NewHomeAssistantClient(mqttClient)
 
 	// TODO do availability
-	// TODO set retain on all MQTT
 
 	// Fan control
 	homeAssistantClient.RegisterFan()
@@ -108,12 +107,12 @@ func main() {
 		}
 
 		if lastPreset == "" || lastPreset != fanStatus.Preset {
-			if t := mqttClient.Publish(config.TopicPrefix+"/fan/state", 0, config.RetainMessages, stateMessage); t.Wait() && t.Error() != nil {
+			if t := mqttClient.Publish(config.TopicPrefix+"/fan/state", 0, true, stateMessage); t.Wait() && t.Error() != nil {
 				log.Printf("MQTT publishing failed: %v", t.Error())
 				return
 			}
 
-			if t := mqttClient.Publish(config.TopicPrefix+"/fan/preset/state", 0, config.RetainMessages, fanStatus.Preset); t.Wait() && t.Error() != nil {
+			if t := mqttClient.Publish(config.TopicPrefix+"/fan/preset/state", 0, true, fanStatus.Preset); t.Wait() && t.Error() != nil {
 				log.Printf("MQTT publishing failed: %v", t.Error())
 				return
 			}
@@ -149,6 +148,12 @@ func main() {
 			class: "temperature",
 			unit:  "°C",
 			get:   func(status *comfoair.Status) interface{} { return status.Temperature.Supply },
+		},
+		{
+			name:  "Comfoair Comfort Temperature",
+			class: "temperature",
+			unit:  "°C",
+			get:   func(status *comfoair.Status) interface{} { return status.Temperature.Comfort },
 		},
 		{
 			name: "Comfoair Supply Fan Speed",
@@ -187,7 +192,7 @@ func main() {
 		for _, sensorConfig := range sensors {
 			value := fmt.Sprintf("%v", sensorConfig.get(status))
 
-			if t := mqttClient.Publish(sensorConfig.stateTopic, 0, config.RetainMessages, value); t.Wait() && t.Error() != nil {
+			if t := mqttClient.Publish(sensorConfig.stateTopic, 0, true, value); t.Wait() && t.Error() != nil {
 				log.Printf("MQTT publishing failed: %v", t.Error())
 				continue
 			}
