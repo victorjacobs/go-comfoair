@@ -9,17 +9,17 @@ import (
 	"github.com/victorjacobs/go-comfoair/config"
 )
 
-type HomeAssistantClient struct {
+type Client struct {
 	mqtt mqtt.Client
 }
 
-func NewHomeAssistantClient(mqtt mqtt.Client) *HomeAssistantClient {
-	return &HomeAssistantClient{
+func NewClient(mqtt mqtt.Client) *Client {
+	return &Client{
 		mqtt: mqtt,
 	}
 }
 
-func (h *HomeAssistantClient) RegisterFan() error {
+func (h *Client) RegisterFan() error {
 	fanConfiguration, _ := json.Marshal(fanConfiguration{
 		UniqueId:               "comfoair_fan",
 		Name:                   "Comfoair",
@@ -37,7 +37,7 @@ func (h *HomeAssistantClient) RegisterFan() error {
 	return nil
 }
 
-func (h *HomeAssistantClient) RegisterSensor(name string, class string, unit string) (string, error) {
+func (h *Client) RegisterSensor(name string, class string, unit string) (string, error) {
 	uniqueId := strings.Replace(strings.ToLower(name), " ", "_", -1)
 
 	var stateTopic string

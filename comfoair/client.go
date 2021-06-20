@@ -14,19 +14,19 @@ import (
 
 // TODO preset enums?
 
-type ComfoairClient struct {
+type Client struct {
 	serialPort        string
 	mutex             sync.Mutex
 	previousFanPreset string
 }
 
-func NewComfoairClient(serialPort string) (*ComfoairClient, error) {
-	return &ComfoairClient{
+func NewClient(serialPort string) (*Client, error) {
+	return &Client{
 		serialPort: serialPort,
 	}, nil
 }
 
-func (c *ComfoairClient) GetDeviceInfo() (*DeviceInfo, error) {
+func (c *Client) GetDeviceInfo() (*DeviceInfo, error) {
 	if response, err := c.write([]byte{0x00, 0x69}, []byte{}); err != nil {
 		return nil, err
 	} else {
@@ -38,7 +38,7 @@ func (c *ComfoairClient) GetDeviceInfo() (*DeviceInfo, error) {
 	}
 }
 
-func (c *ComfoairClient) GetStatus() (*Status, error) {
+func (c *Client) GetStatus() (*Status, error) {
 	if temp, err := c.GetTemperatureStatus(); err != nil {
 		return nil, err
 	} else if fan, err := c.GetFanStatus(); err != nil {
@@ -54,7 +54,7 @@ func (c *ComfoairClient) GetStatus() (*Status, error) {
 	}
 }
 
-func (c *ComfoairClient) GetFanStatus() (*FanStatus, error) {
+func (c *Client) GetFanStatus() (*FanStatus, error) {
 	if response, err := c.write([]byte{0x00, 0x0b}, []byte{}); err != nil {
 		return nil, err
 	} else {
@@ -90,7 +90,7 @@ func parseFanPreset(speed int) string {
 	return preset
 }
 
-func (c *ComfoairClient) GetValveStatus() (*ValveStatus, error) {
+func (c *Client) GetValveStatus() (*ValveStatus, error) {
 	if response, err := c.write([]byte{0x00, 0x0d}, []byte{}); err != nil {
 		return nil, err
 	} else {
@@ -115,7 +115,7 @@ func (c *ComfoairClient) GetValveStatus() (*ValveStatus, error) {
 	}
 }
 
-func (c *ComfoairClient) GetTemperatureStatus() (*TemperatureStatus, error) {
+func (c *Client) GetTemperatureStatus() (*TemperatureStatus, error) {
 	if response, err := c.write([]byte{0x00, 0xd1}, []byte{}); err != nil {
 		return nil, err
 	} else {
@@ -133,7 +133,7 @@ func parseTemperature(temp byte) float32 {
 	return float32(temp)/2.0 - 20
 }
 
-func (c *ComfoairClient) GetOperatingTime() (*OperatingTime, error) {
+func (c *Client) GetOperatingTime() (*OperatingTime, error) {
 	if response, err := c.write([]byte{0x00, 0xdd}, []byte{}); err != nil {
 		return nil, err
 	} else {
@@ -146,7 +146,7 @@ func (c *ComfoairClient) GetOperatingTime() (*OperatingTime, error) {
 	}
 }
 
-func (c *ComfoairClient) SetFanPreset(preset string) error {
+func (c *Client) SetFanPreset(preset string) error {
 	var fanSpeed int
 	if preset == "off" {
 		fanSpeed = 1
@@ -169,7 +169,7 @@ func (c *ComfoairClient) SetFanPreset(preset string) error {
 	return nil
 }
 
-func (c *ComfoairClient) ToggleFan(toggle bool) error {
+func (c *Client) ToggleFan(toggle bool) error {
 	log.Printf("Toggling fan %v", toggle)
 
 	if toggle {
@@ -191,7 +191,7 @@ func (c *ComfoairClient) ToggleFan(toggle bool) error {
 	}
 }
 
-func (c *ComfoairClient) setFanSpeed(speed int) error {
+func (c *Client) setFanSpeed(speed int) error {
 	if speed < 0 || speed > 4 {
 		return fmt.Errorf("invalid fan speed, tried to set %v", speed)
 	}
@@ -211,7 +211,7 @@ func convertThreeBytesToInteger(data []byte) int {
 	return int(binary.BigEndian.Uint32(arr[:]))
 }
 
-func (c *ComfoairClient) write(cmd []byte, data []byte) ([]byte, error) {
+func (c *Client) write(cmd []byte, data []byte) ([]byte, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
