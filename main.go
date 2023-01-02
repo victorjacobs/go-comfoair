@@ -2,11 +2,14 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/julienschmidt/httprouter"
 	"github.com/victorjacobs/go-comfoair/bridge"
 	"github.com/victorjacobs/go-comfoair/config"
+	"github.com/victorjacobs/go-comfoair/routes"
 )
 
 // TODO do availability
@@ -49,6 +52,14 @@ func main() {
 		bridge.PollSensors(mqttClient)
 
 		time.Sleep(time.Minute)
+	})
+
+	// Start httprouter
+	router := httprouter.New()
+	router.GET("/state", routes.State(bridge))
+
+	go loopSafely(func() {
+		http.ListenAndServe(":8080", router)
 	})
 
 	select {}

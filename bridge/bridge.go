@@ -133,3 +133,7 @@ func (b *Bridge) PollFanState(mqttClient mqtt.Client) {
 		b.lastPreset = fanStatus.Preset
 	}
 }
+
+func (b *Bridge) GetOperatingTime() (*comfoair.OperatingTime, error) {
+	return b.comfoairClient.GetOperatingTime()
+}
